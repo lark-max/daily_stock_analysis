@@ -1,0 +1,63 @@
+# 工作流名称，可自定义
+name: Auto Sync Fork with Upstream Repository
+
+# 触发条件：定时 + 手动触发
+on:
+  # 定时同步：每天 UTC 0 点（北京时间 8 点）执行
+  # 如需调整频率，参考 cron 表达式：https://crontab.guru/
+  schedule:
+    - cron: '0 0 * * *'
+  # 手动触发开关（在仓库 Actions 页面可手动点运行）
+  workflow_dispatch:
+
+# 权限配置（解决 push 权限问题）
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-upstream:
+    # 运行环境：最新版 Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      # 步骤1：检出当前 fork 仓库代码
+      - name: Checkout Fork Repository
+        uses: actions/checkout@v4
+        with:
+          # 拉取所有历史，避免合并冲突
+          fetch-depth: 0
+          # 如需使用 PAT 令牌（推荐），取消下面注释并配置 Secrets
+          token: ${{ secrets.GH_PAT }}
+
+      # 步骤2：配置 Git 身份（必须，否则提交会失败）
+      - name: Configure Git User
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      # 步骤3：添加上游仓库地址（核心！替换下面的地址）
+      - name: Add Upstream Repository
+        run: |
+          # 替换这里：上游仓库（原仓库）的 HTTPS 地址
+          git remote add upstream https://github.com/ZhuLinsen/daily_stock_analysis.git
+          # 验证上游地址是否正确
+          git remote -v
+
+      # 步骤4：拉取上游仓库最新代码
+      - name: Fetch Upstream Changes
+        run: git fetch upstream
+
+      # 步骤5：切换到目标分支并合并上游代码
+      - name: Merge Upstream Changes to Target Branch
+        run: |
+          # 替换这里：你的 fork 仓库要同步的分支（通常是 main 或 master）
+          TARGET_BRANCH="main"
+          git checkout $TARGET_BRANCH
+          # 合并上游同名分支，--no-edit 自动跳过提交信息编辑
+          git merge upstream/$TARGET_BRANCH --no-edit || echo "Merge conflict detected, need manual resolve"
+
+      # 步骤6：推送合并后的代码到自己的 fork 仓库
+      - name: Push Changes to Fork
+        run: |
+          TARGET_BRANCH="main"
+          git push origin $TARGET_BRANCH
